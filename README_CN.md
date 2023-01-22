@@ -1,5 +1,5 @@
 # lw二合一焊台
-![alt p1](./p1.jpg)
+![image](https://image.lceda.cn/pullimage/vQP46FFlfbOm5sraZ4GKLsGqRL4FvPVqw5Z7oa6u.jpeg)
 * 支持T12、JBC210、JBC245烙铁头
 * 支持220V 700W风枪
 
