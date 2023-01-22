@@ -83,7 +83,7 @@
 #define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
 
 /*Input device read period in milliseconds*/
-#define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
+#define LV_INDEV_DEF_READ_PERIOD 20     /*[ms]*/
 
 /*Use a custom tick source that tells the elapsed time in milliseconds.
  *It removes the need to manually update the tick with `lv_tick_inc()`)*/
@@ -295,7 +295,7 @@
     #define LV_SPRINTF_USE_FLOAT 1
 #endif  /*LV_SPRINTF_CUSTOM*/
 
-#define LV_USE_USER_DATA 1
+#define LV_USE_USER_DATA 0
 
 /*Garbage Collector settings
  *Used if lvgl is bound to higher level language and the memory is managed by that language*/

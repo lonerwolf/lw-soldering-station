@@ -5,39 +5,129 @@
 #include <string.h>
 #include "solder.h"
 #include "ch32v30x_conf.h"
+#include "tools.h"
 
-//数字范围映射
-static float solder_map(float value, float fromLow, float fromHigh, float toLow, float toHigh) {
-    return ((value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow) + toLow);
-}
+#define SOLDER_PID_JBC245_AGG_KP 0.5
+#define SOLDER_PID_JBC245_AGG_KI 1
+#define SOLDER_PID_JBC245_AGG_KD 0
+#define SOLDER_PID_JBC245_CONS_KP 0.5
+#define SOLDER_PID_JBC245_CONS_KI 1
+#define SOLDER_PID_JBC245_CONS_KD 0
 
-#define SOLDER_IRON_TEMP_100 20
-#define SOLDER_IRON_TEMP_150 210
-#define SOLDER_IRON_TEMP_200 750
-#define SOLDER_IRON_TEMP_250 1200
-#define SOLDER_IRON_TEMP_300 2000
-#define SOLDER_IRON_TEMP_350 2640
-#define SOLDER_IRON_TEMP_400 2900
-#define SOLDER_IRON_TEMP_450 3120
-static uint16_t solder_conv_iron_adc_to_temp(PtSolder handle,uint16_t adc) {
+#define SOLDER_PID_JBC210_AGG_KP 0.5
+#define SOLDER_PID_JBC210_AGG_KI 1
+#define SOLDER_PID_JBC210_AGG_KD 0
+#define SOLDER_PID_JBC210_CONS_KP 0.5
+#define SOLDER_PID_JBC210_CONS_KI 1
+#define SOLDER_PID_JBC210_CONS_KD 0
+
+#define SOLDER_PID_T12_AGG_KP 11
+#define SOLDER_PID_T12_AGG_KI 1
+#define SOLDER_PID_T12_AGG_KD 0
+#define SOLDER_PID_T12_CONS_KP 0.5
+#define SOLDER_PID_T12_CONS_KI 0.6
+#define SOLDER_PID_T12_CONS_KD 0
+
+#define SOLDER_PID_GUN_AGG_KP 11
+#define SOLDER_PID_GUN_AGG_KI 0.5
+#define SOLDER_PID_GUN_AGG_KD 1
+#define SOLDER_PID_GUN_CONS_KP 0.5
+#define SOLDER_PID_GUN_CONS_KI 0.6
+#define SOLDER_PID_GUN_CONS_KD 6
+
+#define SOLDER_T12_IRON_TEMP_100_ADC_VALUE 20
+#define SOLDER_T12_IRON_TEMP_150_ADC_VALUE 210
+#define SOLDER_T12_IRON_TEMP_200_ADC_VALUE 750
+#define SOLDER_T12_IRON_TEMP_250_ADC_VALUE 1200
+#define SOLDER_T12_IRON_TEMP_300_ADC_VALUE 2000
+#define SOLDER_T12_IRON_TEMP_350_ADC_VALUE 2640
+#define SOLDER_T12_IRON_TEMP_400_ADC_VALUE 2900
+#define SOLDER_T12_IRON_TEMP_450_ADC_VALUE 3120
+
+#define SOLDER_JBC210_IRON_TEMP_100_ADC_VALUE 20
+#define SOLDER_JBC210_IRON_TEMP_150_ADC_VALUE 210
+#define SOLDER_JBC210_IRON_TEMP_200_ADC_VALUE 750
+#define SOLDER_JBC210_IRON_TEMP_250_ADC_VALUE 1200
+#define SOLDER_JBC210_IRON_TEMP_300_ADC_VALUE 2000
+#define SOLDER_JBC210_IRON_TEMP_350_ADC_VALUE 2640
+#define SOLDER_JBC210_IRON_TEMP_400_ADC_VALUE 2900
+#define SOLDER_JBC210_IRON_TEMP_450_ADC_VALUE 3120
+
+#define SOLDER_JBC245_IRON_TEMP_100_ADC_VALUE 20
+#define SOLDER_JBC245_IRON_TEMP_150_ADC_VALUE 210
+#define SOLDER_JBC245_IRON_TEMP_200_ADC_VALUE 750
+#define SOLDER_JBC245_IRON_TEMP_250_ADC_VALUE 1200
+#define SOLDER_JBC245_IRON_TEMP_300_ADC_VALUE 2000
+#define SOLDER_JBC245_IRON_TEMP_350_ADC_VALUE 2640
+#define SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE 2900
+#define SOLDER_JBC245_IRON_TEMP_450_ADC_VALUE 3120
+
+#define SOLDER_GUN_TEMP_200_ADC_VALUE 750
+#define SOLDER_GUN_TEMP_250_ADC_VALUE 900
+#define SOLDER_GUN_TEMP_300_ADC_VALUE 1000
+#define SOLDER_GUN_TEMP_350_ADC_VALUE 1200
+#define SOLDER_GUN_TEMP_400_ADC_VALUE 1400
+#define SOLDER_GUN_TEMP_450_ADC_VALUE 1600
+
+static uint16_t solder_conv_iron_adc_to_temp(PtSolder handle, uint16_t adc) {
     switch (handle->iron_type) {
         case SolderIronType_JBC245:
-            if (adc < SOLDER_IRON_TEMP_100)
-                return solder_map(adc, 0, SOLDER_IRON_TEMP_100, 0, 100);
-            else if (adc < SOLDER_IRON_TEMP_150)
-                return solder_map(adc, SOLDER_IRON_TEMP_100, SOLDER_IRON_TEMP_150, 100, 150);
-            else if (adc < SOLDER_IRON_TEMP_200)
-                return solder_map(adc, SOLDER_IRON_TEMP_150, SOLDER_IRON_TEMP_200, 150, 200);
-            else if (adc < SOLDER_IRON_TEMP_250)
-                return solder_map(adc, SOLDER_IRON_TEMP_200, SOLDER_IRON_TEMP_250, 200, 250);
-            else if (adc < SOLDER_IRON_TEMP_300)
-                return solder_map(adc, SOLDER_IRON_TEMP_250, SOLDER_IRON_TEMP_300, 250, 300);
-            else if (adc < SOLDER_IRON_TEMP_350)
-                return solder_map(adc, SOLDER_IRON_TEMP_300, SOLDER_IRON_TEMP_350, 300, 350);
-            else if (adc < SOLDER_IRON_TEMP_400)
-                return solder_map(adc, SOLDER_IRON_TEMP_350, SOLDER_IRON_TEMP_400, 350, 400);
-            else if (adc < SOLDER_IRON_TEMP_450)
-                return solder_map(adc, SOLDER_IRON_TEMP_400, SOLDER_IRON_TEMP_450, 400, 450);
+            if (adc < SOLDER_JBC245_IRON_TEMP_100_ADC_VALUE)
+                return tools_map(adc, 0, SOLDER_JBC245_IRON_TEMP_100_ADC_VALUE, 0, 100);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_150_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_100_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_150_ADC_VALUE, 100, 150);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_200_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_150_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_200_ADC_VALUE, 150, 200);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_250_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_200_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_250_ADC_VALUE, 200, 250);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_300_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_250_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_300_ADC_VALUE, 250, 300);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_350_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_300_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_350_ADC_VALUE, 300, 350);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_350_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE, 350, 400);
+            else if (adc < SOLDER_JBC245_IRON_TEMP_450_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE, SOLDER_JBC245_IRON_TEMP_450_ADC_VALUE, 400, 450);
+            else
+                return 600;
+            break;
+        case SolderIronType_JBC210:
+            if (adc < SOLDER_JBC210_IRON_TEMP_100_ADC_VALUE)
+                return tools_map(adc, 0, SOLDER_JBC210_IRON_TEMP_100_ADC_VALUE, 0, 100);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_150_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_100_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_150_ADC_VALUE, 100, 150);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_200_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_150_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_200_ADC_VALUE, 150, 200);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_250_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_200_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_250_ADC_VALUE, 200, 250);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_300_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_250_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_300_ADC_VALUE, 250, 300);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_350_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_300_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_350_ADC_VALUE, 300, 350);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_400_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_350_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_400_ADC_VALUE, 350, 400);
+            else if (adc < SOLDER_JBC210_IRON_TEMP_450_ADC_VALUE)
+                return tools_map(adc, SOLDER_JBC210_IRON_TEMP_400_ADC_VALUE, SOLDER_JBC210_IRON_TEMP_450_ADC_VALUE, 400, 450);
+            else
+                return 600;
+            break;
+        case SolderIronType_T12:
+            if (adc < SOLDER_T12_IRON_TEMP_100_ADC_VALUE)
+                return tools_map(adc, 0, SOLDER_T12_IRON_TEMP_100_ADC_VALUE, 0, 100);
+            else if (adc < SOLDER_T12_IRON_TEMP_150_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_100_ADC_VALUE, SOLDER_T12_IRON_TEMP_150_ADC_VALUE, 100, 150);
+            else if (adc < SOLDER_T12_IRON_TEMP_200_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_150_ADC_VALUE, SOLDER_T12_IRON_TEMP_200_ADC_VALUE, 150, 200);
+            else if (adc < SOLDER_T12_IRON_TEMP_250_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_200_ADC_VALUE, SOLDER_T12_IRON_TEMP_250_ADC_VALUE, 200, 250);
+            else if (adc < SOLDER_T12_IRON_TEMP_300_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_250_ADC_VALUE, SOLDER_T12_IRON_TEMP_300_ADC_VALUE, 250, 300);
+            else if (adc < SOLDER_T12_IRON_TEMP_350_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_300_ADC_VALUE, SOLDER_T12_IRON_TEMP_350_ADC_VALUE, 300, 350);
+            else if (adc < SOLDER_T12_IRON_TEMP_400_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_350_ADC_VALUE, SOLDER_T12_IRON_TEMP_400_ADC_VALUE, 350, 400);
+            else if (adc < SOLDER_T12_IRON_TEMP_450_ADC_VALUE)
+                return tools_map(adc, SOLDER_T12_IRON_TEMP_400_ADC_VALUE, SOLDER_T12_IRON_TEMP_450_ADC_VALUE, 400, 450);
             else
                 return 600;
             break;
@@ -46,39 +136,33 @@ static uint16_t solder_conv_iron_adc_to_temp(PtSolder handle,uint16_t adc) {
     return 1000;
 }
 
-#define SOLDER_GUN_TEMP_200 750
-#define SOLDER_GUN_TEMP_250 900
-#define SOLDER_GUN_TEMP_300 1000
-#define SOLDER_GUN_TEMP_350 1200
-#define SOLDER_GUN_TEMP_400 1400
-#define SOLDER_GUN_TEMP_450 1600
 static uint16_t solder_conv_gun_adc_to_temp(PtSolder handle, uint16_t adc) {
-    if (adc < SOLDER_GUN_TEMP_200)
-        return solder_map(adc, 0, SOLDER_GUN_TEMP_200, 0, 200);
-    else if (adc < SOLDER_GUN_TEMP_250)
-        return solder_map(adc, SOLDER_GUN_TEMP_200, SOLDER_GUN_TEMP_250, 200, 250);
-    else if (adc < SOLDER_GUN_TEMP_300)
-        return solder_map(adc, SOLDER_GUN_TEMP_250, SOLDER_GUN_TEMP_300, 250, 300);
-    else if (adc < SOLDER_GUN_TEMP_350)
-        return solder_map(adc, SOLDER_GUN_TEMP_300, SOLDER_GUN_TEMP_350, 300, 350);
-    else if (adc < SOLDER_GUN_TEMP_400)
-        return solder_map(adc, SOLDER_GUN_TEMP_350, SOLDER_GUN_TEMP_400, 350, 400);
-    else if (adc < SOLDER_GUN_TEMP_450)
-        return solder_map(adc, SOLDER_GUN_TEMP_400, SOLDER_GUN_TEMP_450, 400, 450);
+    if (adc < SOLDER_GUN_TEMP_200_ADC_VALUE)
+        return tools_map(adc, 0, SOLDER_GUN_TEMP_200_ADC_VALUE, 0, 200);
+    else if (adc < SOLDER_GUN_TEMP_250_ADC_VALUE)
+        return tools_map(adc, SOLDER_GUN_TEMP_200_ADC_VALUE, SOLDER_GUN_TEMP_250_ADC_VALUE, 200, 250);
+    else if (adc < SOLDER_GUN_TEMP_300_ADC_VALUE)
+        return tools_map(adc, SOLDER_GUN_TEMP_250_ADC_VALUE, SOLDER_GUN_TEMP_300_ADC_VALUE, 250, 300);
+    else if (adc < SOLDER_GUN_TEMP_350_ADC_VALUE)
+        return tools_map(adc, SOLDER_GUN_TEMP_300_ADC_VALUE, SOLDER_GUN_TEMP_350_ADC_VALUE, 300, 350);
+    else if (adc < SOLDER_GUN_TEMP_400_ADC_VALUE)
+        return tools_map(adc, SOLDER_GUN_TEMP_350_ADC_VALUE, SOLDER_GUN_TEMP_400_ADC_VALUE, 350, 400);
+    else if (adc < SOLDER_GUN_TEMP_450_ADC_VALUE)
+        return tools_map(adc, SOLDER_GUN_TEMP_400_ADC_VALUE, SOLDER_GUN_TEMP_450_ADC_VALUE, 400, 450);
     else
         return 600;
 }
 
-static void solder_reset_pid_param(PtSolderPid handle) {
+static inline void solder_reset_pid_param(PtSolderPid handle) {
     handle->e0 = 0;
     handle->e1 = 0;
 }
 
-static void solder_reset_iron_temp_mean(PtSolder handle) {
+static inline void solder_reset_iron_temp_mean(PtSolder handle) {
     memset(handle->iron_temp_mean_filtering_array, 0, SOLDER_IRON_MEAN_FILTERING_ARRAY_LEN * sizeof(uint16_t));
 }
 
-static void solder_reset_gun_temp_mean(PtSolder handle) {
+static inline void solder_reset_gun_temp_mean(PtSolder handle) {
     memset(handle->gun_temp_mean_filtering_array, 0, SOLDER_GUN_MEAN_FILTERING_ARRAY_LEN * sizeof(uint16_t));
 }
 
@@ -90,7 +174,7 @@ static uint16_t solder_iron_temp_mean_filtering(PtSolder handle, uint16_t curren
     }
     sum += currentTemp;
     memmove(handle->iron_temp_mean_filtering_array, handle->iron_temp_mean_filtering_array + 1,
-            (SOLDER_IRON_MEAN_FILTERING_ARRAY_LEN - 1)*sizeof(uint16_t));
+            (SOLDER_IRON_MEAN_FILTERING_ARRAY_LEN - 1) * sizeof(uint16_t));
     handle->iron_temp_mean_filtering_array[SOLDER_IRON_MEAN_FILTERING_ARRAY_LEN - 1] = currentTemp;
 
     return sum / SOLDER_IRON_MEAN_FILTERING_ARRAY_LEN;
@@ -103,7 +187,7 @@ static uint16_t solder_gun_temp_mean_filtering(PtSolder handle, uint16_t current
     }
     sum += currentTemp;
     memmove(handle->gun_temp_mean_filtering_array, handle->gun_temp_mean_filtering_array + 1,
-            (SOLDER_GUN_MEAN_FILTERING_ARRAY_LEN - 1)*sizeof(uint16_t));
+            (SOLDER_GUN_MEAN_FILTERING_ARRAY_LEN - 1) * sizeof(uint16_t));
     handle->gun_temp_mean_filtering_array[SOLDER_GUN_MEAN_FILTERING_ARRAY_LEN - 1] = currentTemp;
 
     return sum / SOLDER_GUN_MEAN_FILTERING_ARRAY_LEN;
@@ -123,7 +207,7 @@ int solder_init(PtSolder handle, SolderIronType ironType,
         || gunSetPwmFun == NULL
         || gunGetPwmFun == NULL
         || gun220SetGpioFun == NULL
-           || gunFanSetPwmFun == NULL) {
+        || gunFanSetPwmFun == NULL) {
         return -1;
     }
 
@@ -137,33 +221,49 @@ int solder_init(PtSolder handle, SolderIronType ironType,
     handle->gun_220_ctl_fun = gun220SetGpioFun;
     handle->gun_fan_set_pwm_fun = gunFanSetPwmFun;
 
-    handle->iron_pid.aggKp = 0.5;
-    handle->iron_pid.aggKi = 1;
-    handle->iron_pid.aggKd = 0;
-    handle->iron_pid.consKp = 0.5;
-    handle->iron_pid.consKi = 1;
-    handle->iron_pid.consKd = 0;
-
-    handle->gun_pid.aggKp = 11;
-    handle->gun_pid.aggKi = 0.5;
-    handle->gun_pid.aggKd = 1;
-    handle->gun_pid.consKp = 0.5;
-    handle->gun_pid.consKi = 0.6;
-    handle->gun_pid.consKd = 6;
-
     handle->iron_type = ironType;
     switch (ironType) {
         case SolderIronType_T12:
+            handle->iron_stop_in_adc = true;
+
+            handle->iron_pid.aggKp = SOLDER_PID_T12_AGG_KP;
+            handle->iron_pid.aggKi = SOLDER_PID_T12_AGG_KI;
+            handle->iron_pid.aggKd = SOLDER_PID_T12_AGG_KD;
+            handle->iron_pid.consKp = SOLDER_PID_T12_CONS_KP;
+            handle->iron_pid.consKi = SOLDER_PID_T12_CONS_KI;
+            handle->iron_pid.consKd = SOLDER_PID_T12_CONS_KD;
+            break;
         case SolderIronType_JBC210:
             handle->iron_stop_in_adc = true;
+
+            handle->iron_pid.aggKp = SOLDER_PID_JBC210_AGG_KP;
+            handle->iron_pid.aggKi = SOLDER_PID_JBC210_AGG_KI;
+            handle->iron_pid.aggKd = SOLDER_PID_JBC210_AGG_KD;
+            handle->iron_pid.consKp = SOLDER_PID_JBC210_CONS_KP;
+            handle->iron_pid.consKi = SOLDER_PID_JBC210_CONS_KI;
+            handle->iron_pid.consKd = SOLDER_PID_JBC210_CONS_KD;
             break;
         case SolderIronType_JBC245:
             handle->iron_stop_in_adc = false;
+
+            handle->iron_pid.aggKp = SOLDER_PID_JBC245_AGG_KP;
+            handle->iron_pid.aggKi = SOLDER_PID_JBC245_AGG_KI;
+            handle->iron_pid.aggKd = SOLDER_PID_JBC245_AGG_KD;
+            handle->iron_pid.consKp = SOLDER_PID_JBC245_CONS_KP;
+            handle->iron_pid.consKi = SOLDER_PID_JBC245_CONS_KI;
+            handle->iron_pid.consKd = SOLDER_PID_JBC245_CONS_KD;
             break;
         default:
             handle->iron_stop_in_adc = false;
             break;
     }
+
+    handle->gun_pid.aggKp = SOLDER_PID_GUN_AGG_KP;
+    handle->gun_pid.aggKi = SOLDER_PID_GUN_AGG_KI;
+    handle->gun_pid.aggKd = SOLDER_PID_GUN_AGG_KD;
+    handle->gun_pid.consKp = SOLDER_PID_GUN_CONS_KP;
+    handle->gun_pid.consKi = SOLDER_PID_GUN_CONS_KI;
+    handle->gun_pid.consKd = SOLDER_PID_GUN_CONS_KD;
 
     return 0;
 }
@@ -180,11 +280,11 @@ void solder_set_iron_dest_temp(PtSolder handle, uint16_t destTemp) {
 
 void solder_set_iron_reed_key(PtSolder handle, bool key) {
     handle->iron_reed_key = key;
-    if(handle->iron_reed_key){
+    if (handle->iron_reed_key) {
         if (handle->iron_mode != SolderIronMode_OFF) {
             handle->iron_mode = SolderIronMode_Sleep;
         }
-    }else{
+    } else {
         if (handle->iron_mode == SolderIronMode_Sleep) {
             handle->iron_mode = SolderIronMode_Heat;
             solder_reset_iron_temp_mean(handle);
@@ -227,11 +327,11 @@ void solder_set_gun_fan_value(PtSolder handle, uint8_t v) {
 
 void solder_set_gun_reed_key(PtSolder handle, bool key) {
     handle->gun_reed_key = key;
-    if(handle->gun_reed_key){
+    if (handle->gun_reed_key) {
         if (handle->gun_mode != SolderGunMode_OFF) {
             handle->gun_mode = SolderGunMode_Sleep;
         }
-    }else{
+    } else {
         if (handle->gun_mode == SolderGunMode_Sleep) {
             handle->gun_mode = SolderGunMode_Heat;
             solder_reset_gun_temp_mean(handle);
@@ -244,17 +344,36 @@ void solder_set_gun_reed_key(PtSolder handle, bool key) {
 static uint8_t solder_iron_pid_op(PtSolder handle, uint16_t destValue, uint16_t nowValue, uint8_t currentOutput) {
     int32_t e = destValue - nowValue;
     int32_t res = 0;
-    if (e > 100) {//温差大于100全速
-        res = SOLDER_PID_MAX_OUTPUT;
-    } else if (e > 50) {//温差大于50激进
-        //增量PID公式 PID=Uk+KP*【E(k)-E(k-1)】+KI*E(k)+KD*【E(k)-2E(k-1)+E(k-2)】
-        int32_t duk = handle->iron_pid.aggKp * (e - handle->iron_pid.e0) + handle->iron_pid.aggKi * e +
-                      handle->iron_pid.aggKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
-        res = currentOutput + duk;
-    } else {
-        int32_t duk = handle->iron_pid.consKp * (e - handle->iron_pid.e0) + handle->iron_pid.consKi * e +
-                      handle->iron_pid.consKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
-        res = currentOutput + duk;
+    switch (handle->iron_type) {
+        case SolderIronType_T12:
+        case SolderIronType_JBC210:
+            if (e > 50) {//温差大于50全速
+                res = SOLDER_PID_MAX_OUTPUT;
+            } else if (e > 30) {//温差大于30激进
+                //增量PID公式 PID=Uk+KP*【E(k)-E(k-1)】+KI*E(k)+KD*【E(k)-2E(k-1)+E(k-2)】
+                int32_t duk = handle->iron_pid.aggKp * (e - handle->iron_pid.e0) + handle->iron_pid.aggKi * e +
+                              handle->iron_pid.aggKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
+                res = currentOutput + duk;
+            } else {
+                int32_t duk = handle->iron_pid.consKp * (e - handle->iron_pid.e0) + handle->iron_pid.consKi * e +
+                              handle->iron_pid.consKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
+                res = currentOutput + duk;
+            }
+            break;
+        case SolderIronType_JBC245:
+            if (e > 100) {//温差大于100全速
+                res = SOLDER_PID_MAX_OUTPUT;
+            } else if (e > 50) {//温差大于50激进
+                //增量PID公式 PID=Uk+KP*【E(k)-E(k-1)】+KI*E(k)+KD*【E(k)-2E(k-1)+E(k-2)】
+                int32_t duk = handle->iron_pid.aggKp * (e - handle->iron_pid.e0) + handle->iron_pid.aggKi * e +
+                              handle->iron_pid.aggKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
+                res = currentOutput + duk;
+            } else {
+                int32_t duk = handle->iron_pid.consKp * (e - handle->iron_pid.e0) + handle->iron_pid.consKi * e +
+                              handle->iron_pid.consKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
+                res = currentOutput + duk;
+            }
+            break;
     }
 
     if (res > SOLDER_PID_MAX_OUTPUT)
@@ -309,7 +428,11 @@ void solder_iron_start(PtSolder handle) {
     if (handle->iron_mode == SolderIronMode_OFF) {
         solder_reset_iron_temp_mean(handle);
         solder_reset_pid_param((PtSolderPid) &(handle->iron_pid));
-        handle->iron_mode = SolderIronMode_Heat;
+        if (handle->iron_reed_key) {
+            handle->iron_mode = SolderIronMode_Sleep;
+        } else {
+            handle->iron_mode = SolderIronMode_Heat;
+        }
         handle->iron_set_pwm_fun(0);
     }
 }
@@ -322,15 +445,16 @@ void solder_iron_stop(PtSolder handle) {
 
 void solder_gun_start(PtSolder handle) {
     if (handle->gun_mode == SolderGunMode_OFF) {
-        if(handle->gun_reed_key){
+        if (handle->gun_reed_key) {
             handle->gun_mode = SolderGunMode_Sleep;
-        }else{
+        } else {
             handle->gun_mode = SolderGunMode_Heat;
         }
         solder_reset_gun_temp_mean(handle);
         solder_reset_pid_param((PtSolderPid) &(handle->gun_pid));
         handle->gun_set_pwm_fun(0);
         handle->gun_220_ctl_fun(true);
+        SOLDER_DELAY_MS(20);
         handle->gun_fan_set_pwm_fun(handle->gun_fan_pwm);
     }
 }
@@ -339,7 +463,7 @@ void solder_gun_stop(PtSolder handle) {
     handle->gun_mode = SolderGunMode_OFF;
     handle->gun_set_pwm_fun(0);
     //光耦零点才真正关闭可控硅,此时再断开继电器
-    SOLDER_DELAY_MS(20);
+    SOLDER_DELAY_MS(12);
     handle->gun_220_ctl_fun(false);
     handle->gun_fan_set_pwm_fun(SOLDER_GUN_FAN_MIN);
 }
@@ -360,11 +484,11 @@ void solder_loop(PtSolder handle) {
             uint8_t currentPwm;
             if (handle->iron_stop_in_adc) {
                 currentPwm = handle->iron_get_pwm_fun();
-                handle->iron_set_pwm_fun(0);
+                handle->iron_set_pwm_fun(SOLDER_PID_MIN_OUTPUT);
                 SOLDER_DELAY_MS(1);
             }
-            if(handle->iron_and_gun_get_adc_fun(&ironAdcV, &gunAdcV)){
-                printf("get adc failed\n");
+            if (handle->iron_and_gun_get_adc_fun(&ironAdcV, &gunAdcV)) {
+                printf("solder_loop get adc failed\n");
             }
             if (handle->iron_stop_in_adc) {
                 handle->iron_set_pwm_fun(currentPwm);
@@ -379,8 +503,8 @@ void solder_loop(PtSolder handle) {
                 destTemp = handle->iron_dest_temp;
             }
             uint8_t currentPwm = handle->iron_get_pwm_fun();
-            uint16_t current_temp = solder_conv_iron_adc_to_temp(handle,ironAdcV);
-            current_temp = solder_iron_temp_mean_filtering(handle,current_temp);
+            uint16_t current_temp = solder_conv_iron_adc_to_temp(handle, ironAdcV);
+            current_temp = solder_iron_temp_mean_filtering(handle, current_temp);
             handle->iron_current_temp = current_temp;
             uint8_t newPwm = solder_iron_pid_op(handle, destTemp, current_temp, currentPwm);
             handle->iron_set_pwm_fun(newPwm);
@@ -389,24 +513,24 @@ void solder_loop(PtSolder handle) {
 
         uint16_t current_gun_temp;
         if (handle->gun_mode != SolderGunMode_OFF) {
-            if (handle->gun_mode == SolderGunMode_Sleep){
-                handle->gun_set_pwm_fun(0);
+            if (handle->gun_mode == SolderGunMode_Sleep) {
+                handle->gun_set_pwm_fun(SOLDER_PID_MIN_OUTPUT);
                 uint16_t current_temp = solder_conv_gun_adc_to_temp(handle, gunAdcV);
-                current_temp = solder_gun_temp_mean_filtering(handle,current_temp);
-                if(current_temp<SOLDER_GUN_TEMP_SLEEP){
+                current_temp = solder_gun_temp_mean_filtering(handle, current_temp);
+                if (current_temp < SOLDER_GUN_TEMP_SLEEP) {
                     handle->gun_fan_set_pwm_fun(SOLDER_GUN_FAN_MIN);
-                }else{
+                } else {
                     handle->gun_fan_set_pwm_fun(handle->gun_fan_pwm);
                 }
-            }else{
+            } else {
                 handle->gun_fan_set_pwm_fun(handle->gun_fan_pwm);
                 if (handle->gun_fan_is_cool) {
-                    handle->gun_set_pwm_fun(0);
+                    handle->gun_set_pwm_fun(SOLDER_PID_MIN_OUTPUT);
                 } else {
                     uint16_t destTemp = handle->gun_dest_temp;
                     uint8_t currentPwm = handle->gun_get_pwm_fun();
                     uint16_t current_temp = solder_conv_gun_adc_to_temp(handle, gunAdcV);
-                    current_temp = solder_gun_temp_mean_filtering(handle,current_temp);
+                    current_temp = solder_gun_temp_mean_filtering(handle, current_temp);
                     handle->gun_current_temp = current_temp;
                     uint8_t newPwm = solder_gun_pid_op(handle, destTemp, current_temp, currentPwm);
                     handle->gun_set_pwm_fun(newPwm);
@@ -425,9 +549,9 @@ void solder_loop(PtSolder handle) {
             printf("iron_dest_temp:%d\n", handle->iron_dest_temp);
             //printf("solder_conv_iron_adc_to_temp:%d\n", solder_conv_iron_adc_to_temp(ironAdcV));
 
-            //printf("SOLDER_IRON_TEMP_400:%d\n", SOLDER_IRON_TEMP_400);
+            //printf("SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE:%d\n", SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE);
             //printf("gun_dest_temp:%d\n",handle->gun_dest_temp);
-            //printf("SOLDER_GUN_TEMP_400:%d\n", SOLDER_GUN_TEMP_400);
+            //printf("SOLDER_GUN_TEMP_400_ADC_VALUE:%d\n", SOLDER_GUN_TEMP_400_ADC_VALUE);
 
             //printf("gunAdcV:%d\n",gunAdcV);
             //printf("gun_pwm:%d\n",handle->gun_get_pwm_fun());

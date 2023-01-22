@@ -26,8 +26,6 @@
 
 static void touchpad_init(void);
 static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data);
-static bool touchpad_is_pressed(void);
-static void touchpad_get_xy(lv_coord_t * x, lv_coord_t * y);
 
 /**********************
  *  STATIC VARIABLES
@@ -106,23 +104,6 @@ static void touchpad_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data)
     data->point.y = last_y;
 }
 
-/*Return true is the touchpad is pressed*/
-static bool touchpad_is_pressed(void)
-{
-    /*Your code comes here*/
-
-    return false;
-}
-
-/*Get the x and y coordinates if the touchpad is pressed*/
-static void touchpad_get_xy(lv_coord_t * x, lv_coord_t * y)
-{
-    /*Your code comes here*/
-    if(gt911_get_xy(x,y)){
-        (*x) = 0;
-        (*y) = 0;
-    }
-}
 
 
 #else /*Enable this file at the top*/

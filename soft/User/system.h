@@ -52,4 +52,7 @@ void system_clear_encoder2_count();
 
 void system_pid_timer_start(system_irq_cb cb);
 
+void system_buzzer_start(void);
+void system_buzzer_stop(void);
+
 #endif //_SYSTEM_H

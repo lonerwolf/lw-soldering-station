@@ -981,14 +981,22 @@ static void system_buzzer_init(void) {
 
     TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
     TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-    TIM_OCInitStructure.TIM_Pulse = 0;
+    TIM_OCInitStructure.TIM_Pulse = 250;
     TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
     TIM_OC4Init(TIM9, &TIM_OCInitStructure);
 
     TIM_CtrlPWMOutputs(TIM9, ENABLE);
     TIM_OC4PreloadConfig(TIM9, TIM_OCPreload_Disable);
     TIM_ARRPreloadConfig(TIM9, ENABLE);
+    //TIM_Cmd(TIM9, ENABLE);
+}
+
+void system_buzzer_start(void) {
     TIM_Cmd(TIM9, ENABLE);
+}
+
+void system_buzzer_stop(void) {
+    TIM_Cmd(TIM9, DISABLE);
 }
 
 void system_set_switch_220_ctl(bool set) {
