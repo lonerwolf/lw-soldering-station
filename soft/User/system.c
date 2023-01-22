@@ -2,6 +2,7 @@
 // Created by lonerwolf on 2023/1/5.
 //
 
+#include <string.h>
 #include "system.h"
 #include "ch32v30x_conf.h"
 #include "rtc.h"
@@ -11,7 +12,10 @@ static int16_t l_adc1_calibrattion_val;
 static int16_t l_adc2_calibrattion_val;
 #define l_adc_count 5
 #define l_adc_channel_size 4
-static uint16_t l_adc_buff[l_adc_count*l_adc_channel_size];
+static uint16_t l_adc_buff[l_adc_count * l_adc_channel_size];
+#define SYSTEM_UART_BUFF_SIZE 64
+static uint8_t l_uart_buff[SYSTEM_UART_BUFF_SIZE];
+static uint8_t l_uart_buff_index = 0;
 
 void system_all_gpio_in(void) {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -209,17 +213,19 @@ void system_lcd_dma(uint32_t dstAddr, uint32_t buffAddr, uint16_t buffSizeHalfWo
 }
 
 static system_irq_cb l_system_pid_timer_cb;
+
 void DMA2_Channel1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-void DMA2_Channel1_IRQHandler(void){
+
+void DMA2_Channel1_IRQHandler(void) {
     DMA_ClearITPendingBit(DMA2_IT_TC1);
     DMA_ClearITPendingBit(DMA2_IT_TE1);
     DMA_ClearITPendingBit(DMA2_IT_GL1);
-    if(l_system_pid_timer_cb){
+    if (l_system_pid_timer_cb) {
         l_system_pid_timer_cb();
     }
 }
 
-void system_lcd_dma_it(uint32_t dstAddr, uint32_t buffAddr, uint16_t buffSizeHalfWord,system_irq_cb cb) {
+void system_lcd_dma_it(uint32_t dstAddr, uint32_t buffAddr, uint16_t buffSizeHalfWord, system_irq_cb cb) {
     DMA_Cmd(DMA2_Channel1, DISABLE);
     NVIC_DisableIRQ(DMA2_Channel1_IRQn);
     DMA_ClearFlag(DMA2_FLAG_TC1);
@@ -334,7 +340,7 @@ static void system_gpio_init(void) {
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
         GPIO_Init(GPIOD, &GPIO_InitStructure);
-
+/*
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource12);
         EXTI_InitStructure.EXTI_Line = EXTI_Line12;
         EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
@@ -346,7 +352,7 @@ static void system_gpio_init(void) {
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 10;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
         NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;
-        NVIC_Init(&NVIC_InitStructure);
+        NVIC_Init(&NVIC_InitStructure);*/
 
     }
 
@@ -619,7 +625,7 @@ float system_get_voltage_system() {
     return res;
 }
 
-static float system_get_temp(int adc_offset){
+static float system_get_temp(int adc_offset) {
     float tmp = 0;
     for (int i = 0; i < l_adc_count; i++) {
         tmp = tmp + l_adc_buff[l_adc_channel_size * i + adc_offset];
@@ -848,6 +854,7 @@ void system_pid_timer_start(system_irq_cb cb) {
 }
 
 void TIM6_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+
 void TIM6_IRQHandler(void) {
     if (TIM_GetITStatus(TIM6, TIM_IT_Update) != RESET) {
         TIM_ClearFlag(TIM6, TIM_FLAG_Update);
@@ -1111,7 +1118,7 @@ void system_hardfault_deal(void) {
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
         GPIO_Init(GPIOE, &GPIO_InitStructure);
-        GPIO_ResetBits(GPIOE,GPIO_Pin_4);
+        GPIO_ResetBits(GPIOE, GPIO_Pin_4);
     }
     {
         system_set_gun_pwm(0);
@@ -1124,7 +1131,7 @@ void system_hardfault_deal(void) {
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
         GPIO_Init(GPIOA, &GPIO_InitStructure);
-        GPIO_ResetBits(GPIOA,GPIO_Pin_3);
+        GPIO_ResetBits(GPIOA, GPIO_Pin_3);
     }
     {
         system_set_iron_pwm(0);
@@ -1136,10 +1143,82 @@ void system_hardfault_deal(void) {
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
         GPIO_Init(GPIOA, &GPIO_InitStructure);
-        GPIO_ResetBits(GPIOA,GPIO_Pin_2);
+        GPIO_ResetBits(GPIOA, GPIO_Pin_2);
     }
     system_set_fan_gun_pwm(0);
     system_set_fan_system_pwm(0);
+}
+
+//协议 0XAA 年月日时分秒（年为2000+X）SUM（校验和、年月日时分秒）
+static void system_get_cmd() {
+    if(l_uart_buff_index < 8)
+        return;
+    int index = -1;
+    for (int i = 0; i < l_uart_buff_index; i++) {
+        if (l_uart_buff[i] == 0xAA) {
+            index = i;
+        }
+    }
+    if (index < 0) {
+        return;
+    }
+    if (l_uart_buff_index - index - 1 < 8) {
+        if (index > SYSTEM_UART_BUFF_SIZE - 10) {
+            l_uart_buff_index = 0;
+        }
+        return;
+    }
+    uint8_t sum = 0;
+    for (int i = 0; i < 6; i++) {
+        sum += l_uart_buff[index + i + 1];
+    }
+    if (sum != l_uart_buff[index + 7]) {
+        l_uart_buff_index = l_uart_buff_index - index - 1;
+        memmove(l_uart_buff, l_uart_buff + index + 1, l_uart_buff_index);
+        system_get_cmd();
+    } else {
+        rtc_set(2000 + l_uart_buff[index + 1],
+                l_uart_buff[index + 2],
+                l_uart_buff[index + 3],
+                l_uart_buff[index + 4],
+                l_uart_buff[index + 5],
+                l_uart_buff[index + 6]);
+
+        l_uart_buff_index = l_uart_buff_index - index - 8;
+        memmove(l_uart_buff, l_uart_buff + index + 8, l_uart_buff_index);
+        if (l_uart_buff_index > 0) {
+            system_get_cmd();
+        }
+    }
+}
+
+//接受串口命令，设置RTC
+void USART3_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+
+void USART3_IRQHandler(void) {
+    if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET) {
+        l_uart_buff[l_uart_buff_index] = USART_ReceiveData(USART3);
+        l_uart_buff_index++;
+        if (l_uart_buff_index >= SYSTEM_UART_BUFF_SIZE) {
+            l_uart_buff_index = 0;
+        }
+        USART_ClearITPendingBit(USART3, USART_IT_RXNE);
+        system_get_cmd();
+    }
+}
+
+void system_uart_irq_enable(void) {
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+
+    USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
+
+    NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 10;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    USART_Cmd(USART3, ENABLE);
 }
 
 void system_init(void) {
@@ -1147,6 +1226,8 @@ void system_init(void) {
     RCC->CTLR |= RCC_CSSON;
 
     rtc_init();
+
+    system_uart_irq_enable();
 
     system_gpio_init();
 

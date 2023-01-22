@@ -734,7 +734,7 @@ int main(void) {
 
     system_init();
 
-/*    {
+    {
         RCC_ClocksTypeDef asd;
         RCC_GetClocksFreq(&asd);
         printf("SYSCLK_Frequency:%d\r\n", asd.SYSCLK_Frequency);
@@ -742,10 +742,6 @@ int main(void) {
         printf("PCLK1_Frequency:%d\r\n", asd.PCLK1_Frequency);
         printf("PCLK2_Frequency:%d\r\n", asd.PCLK2_Frequency);
         printf("ADCCLK_Frequency:%d\r\n", asd.ADCCLK_Frequency);
-    }*/
-
-    if (tftlcd_init(&g_tftlcd_dev)) {
-        printf("tftlcd_init failed\n");
     }
 
     l_task_check_handler = xTaskCreateStatic((TaskFunction_t) task_check,
@@ -777,15 +773,23 @@ int main(void) {
     l_task_ui_queue = xQueueCreateStatic(l_task_ui_queue_size, l_task_ui_queue_item_size, l_task_ui_queue_buff,
                                          &l_task_ui_queue_static);
 
-    solder_init(&l_solder_handle, SolderIronType_JBC245, system_get_adc_iron_and_gun_sensor, system_set_iron_pwm,
-                system_get_iron_pwm, system_set_gun_pwm, system_get_gun_pwm, system_set_switch_220_ctl,gun_fan_fun);
+    if (tftlcd_init(&g_tftlcd_dev)) {
+        printf("tftlcd_init failed\n");
+        return -1;
+    }
+
+    if(solder_init(&l_solder_handle, SolderIronType_JBC245, system_get_adc_iron_and_gun_sensor, system_set_iron_pwm,
+                system_get_iron_pwm, system_set_gun_pwm, system_get_gun_pwm, system_set_switch_220_ctl,gun_fan_fun)){
+        printf("solder_init failed\n");
+        return -1;
+    }
     solder_set_iron_dest_temp(&l_solder_handle, l_iron_dest_temp);
     solder_set_iron_reed_key(&l_solder_handle, l_iron_reed_key_switch_state);
     solder_set_gun_dest_temp(&l_solder_handle, l_gun_dest_temp);
     solder_set_gun_reed_key(&l_solder_handle, l_gun_reed_key_switch_state);
     solder_set_gun_fan_is_cool(&l_solder_handle, l_gun_fan_is_cool);
 
-    //printf("vTaskStartScheduler\n");
+    printf("vTaskStartScheduler\n");
     vTaskStartScheduler();
 
     while (1) {
