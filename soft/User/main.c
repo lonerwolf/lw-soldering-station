@@ -152,6 +152,30 @@ static uint32_t l_gun_mode_tick = 0;
 //蜂鸣器时间
 #define BUZZER_PLAY_MS 300
 
+void get_store_param(){
+    //RTC第一次启动会在缓存中写A1A1表示第一次开机
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    PWR_BackupAccessCmd(ENABLE);
+    if(BKP_ReadBackupRegister(BKP_DR1) == 0xA1A1){
+        uint16_t tmp = BKP_ReadBackupRegister(BKP_DR2);
+        if(tmp != 0)
+            l_iron_dest_temp = tmp;
+        tmp = BKP_ReadBackupRegister(BKP_DR3);
+        if(tmp != 0)
+            l_gun_dest_temp = tmp;
+        tmp = BKP_ReadBackupRegister(BKP_DR4);
+        if(tmp != 0)
+            l_gun_dest_fan = tmp;
+    }
+}
+
+void set_store_param(int index,uint16_t data){
+    if(index < 1){
+        return;
+    }
+    BKP_WriteBackupRegister(BKP_DR1 + (index-1)*4,data);
+}
+
 void task_check(void *pvParameters) {
     uint16_t timer_count = 0;
     uint8_t led_pwm_flag = 0;
@@ -526,6 +550,7 @@ void task_pid(void *pvParameters) {
                 solder_set_gun_dest_temp(&l_solder_handle, l_gun_dest_temp);
                 break;
             case CMD_SWITCH_IRON_REED_CHANGE:
+                solder_set_iron_reed_key(&l_solder_handle, l_iron_reed_key_switch_state);
                 break;
             case CMD_SWITCH_IRON_SHAKE_CHANGE:
                 break;
@@ -631,12 +656,15 @@ void task_ui(void *pvParameters) {
                     }
                     break;
                 case CMD_IRON_DEST_TEMP_CHANGE:
+                    set_store_param(2,l_iron_dest_temp);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_iron_set_temp_value, "%d", l_iron_dest_temp);
                     break;
                 case CMD_GUN_DEST_TEMP_CHANGE:
+                    set_store_param(3,l_gun_dest_temp);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_set_temp_value, "%d", l_gun_dest_temp);
                     break;
                 case CMD_GUN_DEST_FAN_CHANGE:
+                    set_store_param(4,l_gun_dest_fan);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_fan_value, "%d", l_gun_dest_fan);
                     break;
                 case CMD_IRON_MODE_CHANGE:
@@ -732,6 +760,7 @@ int main(void) {
     USART_Printf_Init(115200);
     printf("FreeRTOS Kernel Version:%s\r\n", tskKERNEL_VERSION_NUMBER);
 
+    get_store_param();
     system_init();
 
     {

@@ -18,3 +18,7 @@ set(TOOLCHAIN_ROOT "D:\\MounRiver\\MounRiver_Studio\\toolchain\\RISC-V Embedded 
 ## 下载
 单片机FLASH选项选 224K-ROM 96K-RAM
 
+## 待修复
+* 震动开关休眠
+* 屏幕小蓝点
+
