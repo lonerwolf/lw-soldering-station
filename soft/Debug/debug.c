@@ -5,8 +5,10 @@
 * Date               : 2021/06/06
 * Description        : This file contains all the functions prototypes for UART
 *                      Printf , Delay functions.
+*********************************************************************************
 * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
-* SPDX-License-Identifier: Apache-2.0
+* Attention: This software (modified or not) and binary are used for 
+* microcontroller manufactured by Nanjing Qinheng Microelectronics.
 *******************************************************************************/
 #include "debug.h"
 
@@ -108,13 +110,15 @@ void USART_Printf_Init(uint32_t baudrate)
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 #elif(DEBUG == DEBUG_UART3)
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
-/*    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+/*    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
     GPIO_Init(GPIOB, &GPIO_InitStructure);*/
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
 

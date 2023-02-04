@@ -212,7 +212,7 @@ void system_lcd_dma(uint32_t dstAddr, uint32_t buffAddr, uint16_t buffSizeHalfWo
     DMA_Cmd(DMA2_Channel1, ENABLE);
 }
 
-static system_irq_cb l_system_pid_timer_cb;
+static system_irq_cb l_system_lcd_dma_irq_cb;
 
 void DMA2_Channel1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 
@@ -220,8 +220,8 @@ void DMA2_Channel1_IRQHandler(void) {
     DMA_ClearITPendingBit(DMA2_IT_TC1);
     DMA_ClearITPendingBit(DMA2_IT_TE1);
     DMA_ClearITPendingBit(DMA2_IT_GL1);
-    if (l_system_pid_timer_cb) {
-        l_system_pid_timer_cb();
+    if (l_system_lcd_dma_irq_cb != NULL) {
+        l_system_lcd_dma_irq_cb();
     }
 }
 
@@ -263,7 +263,7 @@ void system_lcd_dma_it(uint32_t dstAddr, uint32_t buffAddr, uint16_t buffSizeHal
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&NVIC_InitStructure);
 
-    l_system_pid_timer_cb = cb;
+    l_system_lcd_dma_irq_cb = cb;
 
     DMA_Cmd(DMA2_Channel1, ENABLE);
 }
@@ -324,8 +324,6 @@ static void system_gpio_init(void) {
     //PD12 TOUCH_IRQ
     {
         GPIO_InitTypeDef GPIO_InitStructure = {0};
-        EXTI_InitTypeDef EXTI_InitStructure = {0};
-        NVIC_InitTypeDef NVIC_InitStructure = {0};
 
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE);
 
@@ -819,12 +817,13 @@ static void system_gun_pwm_init(void) {
 
 static void system_pid_timer_init(void) {
     TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure = {0};
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
 
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM6, ENABLE);
 
     TIM_TimeBaseInitStructure.TIM_Period = 200 - 1;
     TIM_TimeBaseInitStructure.TIM_Prescaler = 1440 - 1;
-    //TIM_TimeBaseInitStructure.TIM_Period = 10000 - 1;
+    //TIM_TimeBaseInitStructure.TIM_Period = 20000 - 1;
     //TIM_TimeBaseInitStructure.TIM_Prescaler = 14400 - 1;
     TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -836,11 +835,10 @@ static void system_pid_timer_init(void) {
     TIM_ClearITPendingBit(TIM6, TIM_IT_Update);
     TIM_ITConfig(TIM6, TIM_IT_Update, ENABLE);
 
-    NVIC_InitTypeDef NVIC_InitStructure = {0};
     NVIC_InitStructure.NVIC_IRQChannel = TIM6_IRQn;
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 5; //抢占优先级
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;        //子优先级
-    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;
     NVIC_Init(&NVIC_InitStructure);
 }
 
@@ -848,9 +846,16 @@ static system_irq_cb l_system_pid_timer_cb;
 
 void system_pid_timer_start(system_irq_cb cb) {
     l_system_pid_timer_cb = cb;
-    system_pid_timer_init();
-    //TIM_SetCounter(TIM6,0);
+    TIM_SetCounter(TIM6, 0);
+    //system_pid_timer_init();
+    NVIC_EnableIRQ(TIM6_IRQn);
     TIM_Cmd(TIM6, ENABLE);
+}
+
+void system_pid_timer_stop() {
+    TIM_Cmd(TIM6, DISABLE);
+    NVIC_DisableIRQ(TIM6_IRQn);
+    l_system_pid_timer_cb = NULL;
 }
 
 void TIM6_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
@@ -859,9 +864,9 @@ void TIM6_IRQHandler(void) {
     if (TIM_GetITStatus(TIM6, TIM_IT_Update) != RESET) {
         TIM_ClearFlag(TIM6, TIM_FLAG_Update);
         TIM_ClearITPendingBit(TIM6, TIM_IT_Update);
-        TIM_Cmd(TIM6, DISABLE);
-        NVIC_DisableIRQ(TIM6_IRQn);
-        if (l_system_pid_timer_cb) {
+        //TIM_Cmd(TIM6, DISABLE);
+        //NVIC_DisableIRQ(TIM6_IRQn);
+        if (l_system_pid_timer_cb != NULL) {
             l_system_pid_timer_cb();
         }
     }
@@ -1151,7 +1156,7 @@ void system_hardfault_deal(void) {
 
 //协议 0XAA 年月日时分秒（年为2000+X）SUM（校验和、年月日时分秒）
 static void system_get_cmd() {
-    if(l_uart_buff_index < 8)
+    if (l_uart_buff_index < 8)
         return;
     int index = -1;
     for (int i = 0; i < l_uart_buff_index; i++) {
@@ -1239,4 +1244,6 @@ void system_init(void) {
     system_ec11_init();
     system_iron_pwm_init();
     system_gun_pwm_init();
+
+    system_pid_timer_init();
 }

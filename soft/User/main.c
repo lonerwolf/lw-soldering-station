@@ -95,7 +95,7 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
 }
 
 void vApplicationTickHook(void) {
-    lv_tick_inc(1000/configTICK_RATE_HZ);
+    lv_tick_inc(1000 / configTICK_RATE_HZ);
 }
 
 TFTLCD_DEV g_tftlcd_dev;
@@ -125,7 +125,7 @@ static volatile bool l_rotate2_switch_pre_state = false;
 #define GUN_CH1_TEMP 320
 #define GUN_CH2_TEMP 350
 #define GUN_CH3_TEMP 380
-static volatile uint16_t l_iron_dest_temp = 320;
+static volatile uint16_t l_iron_dest_temp = 250;
 static volatile uint16_t l_gun_dest_temp = 350;
 static volatile uint16_t l_gun_dest_fan = 10;
 static volatile bool l_gun_fan_is_cool = false;
@@ -152,28 +152,29 @@ static uint32_t l_gun_mode_tick = 0;
 //蜂鸣器时间
 #define BUZZER_PLAY_MS 300
 
-void get_store_param(){
+void get_store_param() {
     //RTC第一次启动会在缓存中写A1A1表示第一次开机
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
     PWR_BackupAccessCmd(ENABLE);
-    if(BKP_ReadBackupRegister(BKP_DR1) == 0xA1A1){
+    if (BKP_ReadBackupRegister(BKP_DR1) == 0xA1A1) {
         uint16_t tmp = BKP_ReadBackupRegister(BKP_DR2);
-        if(tmp != 0)
+        if (tmp != 0)
             l_iron_dest_temp = tmp;
         tmp = BKP_ReadBackupRegister(BKP_DR3);
-        if(tmp != 0)
+        if (tmp != 0)
             l_gun_dest_temp = tmp;
         tmp = BKP_ReadBackupRegister(BKP_DR4);
-        if(tmp != 0)
+        if (tmp != 0)
             l_gun_dest_fan = tmp;
     }
+    //PWR_BackupAccessCmd(DISABLE);
 }
 
-void set_store_param(int index,uint16_t data){
-    if(index < 1){
+void set_store_param(int index, uint16_t data) {
+    if (index < 1) {
         return;
     }
-    BKP_WriteBackupRegister(BKP_DR1 + (index-1)*4,data);
+    BKP_WriteBackupRegister(BKP_DR1 + (index - 1) * 4, data);
 }
 
 void task_check(void *pvParameters) {
@@ -238,7 +239,7 @@ void task_check(void *pvParameters) {
                 if (l_rotate1_switch_pre_state == state) {
                     l_rotate1_switch_state = state;
 
-                    if(l_rotate1_switch_state){
+                    if (l_rotate1_switch_state) {
                         if (l_iron_mode == IronMode_NO) {
                             //进入调温
                             l_iron_mode = IronMode_SET_TEMP;
@@ -267,7 +268,7 @@ void task_check(void *pvParameters) {
                 if (l_rotate2_switch_pre_state == state) {
                     l_rotate2_switch_state = state;
 
-                    if(l_rotate2_switch_state){
+                    if (l_rotate2_switch_state) {
                         if (l_gun_mode == GunMode_NO) {
                             //进入调温
                             l_gun_mode = GunMode_SET_TEMP;
@@ -442,7 +443,7 @@ void task_check(void *pvParameters) {
                 }
                 if (l_gun_mode == GunMode_SET_FAN_IS_COOL) {
                     //if(enc%2 != 0){
-                        l_gun_fan_is_cool = !l_gun_fan_is_cool;
+                    l_gun_fan_is_cool = !l_gun_fan_is_cool;
                     //}
                     l_gun_mode_tick = xTaskGetTickCount();
 
@@ -469,25 +470,25 @@ void task_check(void *pvParameters) {
 
         //温度检测 散热风扇
         {
-            if(timer_count % 500 == 0){
+            if (timer_count % 500 == 0) {
                 float temp1 = system_get_temp1();
                 float temp2 = system_get_temp2();
                 uint16_t dest_temp = 0;
-                if(temp1 >= temp2){
+                if (temp1 >= temp2) {
                     dest_temp = temp1;
-                }else{
+                } else {
                     dest_temp = temp2;
                 }
-                if(dest_temp < 20){
+                if (dest_temp < 30) {
                     system_set_fan_system_pwm(0);
-                }else if(dest_temp < 25){
-                    system_set_fan_system_pwm(system_get_fan_max_pwm()*1/5);
-                }else if(dest_temp < 30){
-                    system_set_fan_system_pwm(system_get_fan_max_pwm()*2/5);
-                }else if(dest_temp < 35){
-                    system_set_fan_system_pwm(system_get_fan_max_pwm()*3/5);
-                }else{
-                    system_set_fan_system_pwm(system_get_fan_max_pwm()*4/5);
+                } else if (dest_temp < 40) {
+                    system_set_fan_system_pwm(system_get_fan_max_pwm() * 1 / 5);
+                } else if (dest_temp < 50) {
+                    system_set_fan_system_pwm(system_get_fan_max_pwm() * 2 / 5);
+                } else if (dest_temp < 60) {
+                    system_set_fan_system_pwm(system_get_fan_max_pwm() * 3 / 5);
+                } else {
+                    system_set_fan_system_pwm(system_get_fan_max_pwm() * 4 / 5);
                 }
             }
         }
@@ -509,7 +510,8 @@ void task_pid(void *pvParameters) {
         if (xQueueReceive(l_task_pid_queue, &message, portMAX_DELAY) == pdFALSE) {
             continue;
         }
-        //printf("task_pid CmdType:%d\n", (CmdType) (message));
+        if (message != CMD_PID_SEMAPHORE)
+            printf("task_pid CmdType:%d\n", (CmdType) (message));
         //不能有延时函数，PID计算会队列超出
 
         switch ((CmdType) (message)) {
@@ -537,9 +539,8 @@ void task_pid(void *pvParameters) {
                 break;
             case CMD_PID_SEMAPHORE:
                 solder_loop(&l_solder_handle);
-                if (solder_iron_is_start(&l_solder_handle) || solder_gun_is_start(&l_solder_handle)) {
-                    system_pid_timer_start(pid_timer_cb_irq);
-                } else {
+                if (!solder_iron_is_start(&l_solder_handle) && !solder_gun_is_start(&l_solder_handle)) {
+                    system_pid_timer_stop();
                     pid_timer_is_start = false;
                 }
                 break;
@@ -555,7 +556,7 @@ void task_pid(void *pvParameters) {
             case CMD_SWITCH_IRON_SHAKE_CHANGE:
                 break;
             case CMD_SWITCH_GUN_REED_CHANGE:
-                solder_set_gun_reed_key(&l_solder_handle,l_gun_reed_key_switch_state);
+                solder_set_gun_reed_key(&l_solder_handle, l_gun_reed_key_switch_state);
                 break;
             case CMD_GUN_FAN_TYPE_CHANGE:
                 solder_set_gun_fan_is_cool(&l_solder_handle, l_gun_fan_is_cool);
@@ -567,11 +568,11 @@ void task_pid(void *pvParameters) {
     }
 }
 
-static void anim_progress_load(void* obj, int32_t v) {
-    lv_obj_set_style_text_opa(obj,v,LV_STATE_DEFAULT);
+static void anim_progress_load(void *obj, int32_t v) {
+    lv_obj_set_style_text_opa(obj, v, LV_STATE_DEFAULT);
 }
 
-static void anim_text_start(lv_obj_t * obj,lv_anim_t* anim){
+static void anim_text_start(lv_obj_t *obj, lv_anim_t *anim) {
     lv_anim_init(anim);
     lv_anim_set_var(anim, obj);
     lv_anim_set_exec_cb(anim, (lv_anim_exec_xcb_t) anim_progress_load);
@@ -579,21 +580,22 @@ static void anim_text_start(lv_obj_t * obj,lv_anim_t* anim){
     lv_anim_set_time(anim, 1000);
     //lv_anim_set_repeat_delay(anim, 200);
     lv_anim_set_path_cb(anim, lv_anim_path_linear);
-    lv_anim_set_repeat_count(anim,1000);
+    lv_anim_set_repeat_count(anim, 1000);
     lv_anim_set_playback_time(anim, 1000);
     lv_anim_start(anim);
 }
 
-static void anim_text_stop(lv_obj_t * obj,lv_anim_t* anim){
-    lv_anim_del(anim->var,NULL);
-    lv_obj_set_style_text_opa(obj,255,LV_STATE_DEFAULT);
+static void anim_text_stop(lv_obj_t *obj, lv_anim_t *anim) {
+    lv_anim_del(anim->var, NULL);
+    lv_obj_set_style_text_opa(obj, 255, LV_STATE_DEFAULT);
 }
 
 #include "events_init.h"
-static void iron_ch_cb(uint8_t ch){
-    if(ch == 1)
+
+static void iron_ch_cb(uint8_t ch) {
+    if (ch == 1)
         l_iron_dest_temp = IRON_CH1_TEMP;
-    else if(ch == 2)
+    else if (ch == 2)
         l_iron_dest_temp = IRON_CH2_TEMP;
     else
         l_iron_dest_temp = IRON_CH3_TEMP;
@@ -602,10 +604,10 @@ static void iron_ch_cb(uint8_t ch){
     xQueueSend(l_task_ui_queue, (void *) &message, 0);
 }
 
-static void gun_ch_cb(uint8_t ch){
-    if(ch == 1)
+static void gun_ch_cb(uint8_t ch) {
+    if (ch == 1)
         l_gun_dest_temp = GUN_CH1_TEMP;
-    else if(ch == 2)
+    else if (ch == 2)
         l_gun_dest_temp = GUN_CH2_TEMP;
     else
         l_gun_dest_temp = GUN_CH3_TEMP;
@@ -636,93 +638,107 @@ void task_ui(void *pvParameters) {
 
     while (1) {
         uint8_t message;
-        while(xQueueReceive(l_task_ui_queue, &message, 0) == pdTRUE){
+        while (xQueueReceive(l_task_ui_queue, &message, 0) == pdTRUE) {
             //CmdType cmd = (CmdType) (message);
             //printf("task_ui CmdType:%d\n", (CmdType) (message));
 
             switch ((CmdType) (message)) {
                 case CMD_SWITCH_IRON_CHANGE:
-                    if(l_iron_switch_state){
+                    if (l_iron_switch_state) {
                         lv_led_on(guider_ui.screen_main_led_iron);
-                    }else{
+                    } else {
                         lv_led_off(guider_ui.screen_main_led_iron);
                     }
                     break;
                 case CMD_SWITCH_GUN_CHANGE:
-                    if(l_gun_switch_state){
+                    if (l_gun_switch_state) {
                         lv_led_on(guider_ui.screen_main_led_gun);
-                    }else{
+                    } else {
                         lv_led_off(guider_ui.screen_main_led_gun);
                     }
                     break;
                 case CMD_IRON_DEST_TEMP_CHANGE:
-                    set_store_param(2,l_iron_dest_temp);
+                    set_store_param(2, l_iron_dest_temp);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_iron_set_temp_value, "%d", l_iron_dest_temp);
                     break;
                 case CMD_GUN_DEST_TEMP_CHANGE:
-                    set_store_param(3,l_gun_dest_temp);
+                    set_store_param(3, l_gun_dest_temp);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_set_temp_value, "%d", l_gun_dest_temp);
                     break;
                 case CMD_GUN_DEST_FAN_CHANGE:
-                    set_store_param(4,l_gun_dest_fan);
+                    set_store_param(4, l_gun_dest_fan);
                     lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_fan_value, "%d", l_gun_dest_fan);
                     break;
                 case CMD_IRON_MODE_CHANGE:
                     buzzerTick = xTaskGetTickCount();
                     system_buzzer_start();
-                    if(l_iron_mode == IronMode_SET_TEMP){
-                        anim_text_start(guider_ui.screen_main_lb_iron_set_temp_value,&(guider_ui.screen_main_lb_iron_set_temp_value_anim));
-                    }else{
-                        anim_text_stop(guider_ui.screen_main_lb_iron_set_temp_value,&(guider_ui.screen_main_lb_iron_set_temp_value_anim));
+                    if (l_iron_mode == IronMode_SET_TEMP) {
+                        anim_text_start(guider_ui.screen_main_lb_iron_set_temp_value,
+                                        &(guider_ui.screen_main_lb_iron_set_temp_value_anim));
+                    } else {
+                        anim_text_stop(guider_ui.screen_main_lb_iron_set_temp_value,
+                                       &(guider_ui.screen_main_lb_iron_set_temp_value_anim));
                     }
                     break;
                 case CMD_GUN_MODE_CHANGE:
                     buzzerTick = xTaskGetTickCount();
                     system_buzzer_start();
-                    if(l_gun_mode == GunMode_SET_TEMP){
-                        anim_text_stop(guider_ui.screen_main_lb_hot,&(guider_ui.screen_main_lb_gun_hot_anim));
-                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,&(guider_ui.screen_main_lb_gun_fan_value_anim));
-                        anim_text_start(guider_ui.screen_main_lb_gun_set_temp_value,&(guider_ui.screen_main_lb_gun_set_temp_value_anim));
-                    }else if(l_gun_mode == GunMode_SET_FAN_IS_COOL){
-                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,&(guider_ui.screen_main_lb_gun_set_temp_value_anim));
-                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,&(guider_ui.screen_main_lb_gun_fan_value_anim));
-                        anim_text_start(guider_ui.screen_main_lb_hot,&(guider_ui.screen_main_lb_gun_hot_anim));
-                    }else if(l_gun_mode == GunMode_SET_FAN){
-                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,&(guider_ui.screen_main_lb_gun_set_temp_value_anim));
-                        anim_text_stop(guider_ui.screen_main_lb_hot,&(guider_ui.screen_main_lb_gun_hot_anim));
-                        anim_text_start(guider_ui.screen_main_lb_gun_fan_value,&(guider_ui.screen_main_lb_gun_fan_value_anim));
-                    }else{
-                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,&(guider_ui.screen_main_lb_gun_set_temp_value_anim));
-                        anim_text_stop(guider_ui.screen_main_lb_hot,&(guider_ui.screen_main_lb_gun_hot_anim));
-                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,&(guider_ui.screen_main_lb_gun_fan_value_anim));
+                    if (l_gun_mode == GunMode_SET_TEMP) {
+                        anim_text_stop(guider_ui.screen_main_lb_hot, &(guider_ui.screen_main_lb_gun_hot_anim));
+                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,
+                                       &(guider_ui.screen_main_lb_gun_fan_value_anim));
+                        anim_text_start(guider_ui.screen_main_lb_gun_set_temp_value,
+                                        &(guider_ui.screen_main_lb_gun_set_temp_value_anim));
+                    } else if (l_gun_mode == GunMode_SET_FAN_IS_COOL) {
+                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,
+                                       &(guider_ui.screen_main_lb_gun_set_temp_value_anim));
+                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,
+                                       &(guider_ui.screen_main_lb_gun_fan_value_anim));
+                        anim_text_start(guider_ui.screen_main_lb_hot, &(guider_ui.screen_main_lb_gun_hot_anim));
+                    } else if (l_gun_mode == GunMode_SET_FAN) {
+                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,
+                                       &(guider_ui.screen_main_lb_gun_set_temp_value_anim));
+                        anim_text_stop(guider_ui.screen_main_lb_hot, &(guider_ui.screen_main_lb_gun_hot_anim));
+                        anim_text_start(guider_ui.screen_main_lb_gun_fan_value,
+                                        &(guider_ui.screen_main_lb_gun_fan_value_anim));
+                    } else {
+                        anim_text_stop(guider_ui.screen_main_lb_gun_set_temp_value,
+                                       &(guider_ui.screen_main_lb_gun_set_temp_value_anim));
+                        anim_text_stop(guider_ui.screen_main_lb_hot, &(guider_ui.screen_main_lb_gun_hot_anim));
+                        anim_text_stop(guider_ui.screen_main_lb_gun_fan_value,
+                                       &(guider_ui.screen_main_lb_gun_fan_value_anim));
                     }
                     break;
                 case CMD_GUN_FAN_TYPE_CHANGE:
-                    if(l_gun_fan_is_cool == false){
+                    if (l_gun_fan_is_cool == false) {
                         lv_label_set_text(guider_ui.screen_main_lb_hot, "热风");
-                        lv_obj_set_style_text_color(guider_ui.screen_main_lb_hot,lv_color_make(0xff, 0x00, 0x00),LV_STATE_DEFAULT);
-                    }else{
+                        lv_obj_set_style_text_color(guider_ui.screen_main_lb_hot, lv_color_make(0xff, 0x00, 0x00),
+                                                    LV_STATE_DEFAULT);
+                    } else {
                         lv_label_set_text(guider_ui.screen_main_lb_hot, "冷风");
-                        lv_obj_set_style_text_color(guider_ui.screen_main_lb_hot,lv_color_make(0x00, 0x00, 0xff),LV_STATE_DEFAULT);
+                        lv_obj_set_style_text_color(guider_ui.screen_main_lb_hot, lv_color_make(0x00, 0x00, 0xff),
+                                                    LV_STATE_DEFAULT);
                     }
                     break;
             }
         }
-        if(l_iron_switch_state){
-            lv_label_set_text_fmt(guider_ui.screen_main_lb_iron_temp_value, "%d", solder_get_iron_current_temp(&l_solder_handle));
+        if (l_iron_switch_state) {
+            lv_label_set_text_fmt(guider_ui.screen_main_lb_iron_temp_value, "%d",
+                                  solder_get_iron_current_temp(&l_solder_handle));
             float voltage = system_get_voltage_system();
             float current = system_get_iron_current();
             lv_label_set_text_fmt(guider_ui.screen_main_lb_va, "%.2f", voltage);
             lv_label_set_text_fmt(guider_ui.screen_main_lb_aa, "%.2f", current);
-            lv_label_set_text_fmt(guider_ui.screen_main_lb_wa, "%.2f", voltage*current);
-        }else{
+            lv_label_set_text_fmt(guider_ui.screen_main_lb_wa, "%.2f", voltage * current);
+        } else {
             lv_label_set_text_fmt(guider_ui.screen_main_lb_va, "%.2f", 0);
             lv_label_set_text_fmt(guider_ui.screen_main_lb_aa, "%.2f", 0);
             lv_label_set_text_fmt(guider_ui.screen_main_lb_wa, "%.2f", 0);
             lv_label_set_text_fmt(guider_ui.screen_main_lb_iron_temp_value, "%d", 0);
         }
-        if(l_gun_switch_state){
-            lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_temp_value, "%d", solder_get_gun_current_temp(&l_solder_handle));
+        if (l_gun_switch_state) {
+            lv_label_set_text_fmt(guider_ui.screen_main_lb_gun_temp_value, "%d",
+                                  solder_get_gun_current_temp(&l_solder_handle));
         }
         {
             rtc_get(&calendar);
@@ -733,8 +749,8 @@ void task_ui(void *pvParameters) {
         }
         //关闭蜂鸣器
         {
-            if(buzzerTick != 0){
-                if((xTaskGetTickCount() - buzzerTick)* 1000 / configTICK_RATE_HZ >= BUZZER_PLAY_MS){
+            if (buzzerTick != 0) {
+                if ((xTaskGetTickCount() - buzzerTick) * 1000 / configTICK_RATE_HZ >= BUZZER_PLAY_MS) {
                     system_buzzer_stop();
                     buzzerTick = 0;
                 }
@@ -744,11 +760,12 @@ void task_ui(void *pvParameters) {
     }
 }
 
-static void gun_fan_fun(uint16_t v){
-    if(v == SOLDER_GUN_FAN_MIN){
+static void gun_fan_fun(uint16_t v) {
+    if (v == SOLDER_GUN_FAN_MIN) {
         system_set_fan_gun_pwm(0);
-    }else
-        system_set_fan_gun_pwm(tools_map(v,SOLDER_GUN_FAN_MIN,SOLDER_GUN_FAN_MAX,system_get_fan_gun_min_pwm(),system_get_fan_gun_max_pwm()));
+    } else
+        system_set_fan_gun_pwm(tools_map(v, SOLDER_GUN_FAN_MIN, SOLDER_GUN_FAN_MAX, system_get_fan_gun_min_pwm(),
+                                         system_get_fan_gun_max_pwm()));
 }
 
 int main(void) {
@@ -763,7 +780,7 @@ int main(void) {
     get_store_param();
     system_init();
 
-    {
+/*    {
         RCC_ClocksTypeDef asd;
         RCC_GetClocksFreq(&asd);
         printf("SYSCLK_Frequency:%d\r\n", asd.SYSCLK_Frequency);
@@ -771,7 +788,7 @@ int main(void) {
         printf("PCLK1_Frequency:%d\r\n", asd.PCLK1_Frequency);
         printf("PCLK2_Frequency:%d\r\n", asd.PCLK2_Frequency);
         printf("ADCCLK_Frequency:%d\r\n", asd.ADCCLK_Frequency);
-    }
+    }*/
 
     l_task_check_handler = xTaskCreateStatic((TaskFunction_t) task_check,
                                              (const char *) "task_check",
@@ -790,12 +807,12 @@ int main(void) {
                                            &l_task_pid_task_buffer);
 
     l_task_ui_handler = xTaskCreateStatic((TaskFunction_t) task_ui,
-                                           (const char *) "task_ui",
-                                           (uint32_t) TASK_UI_STK_SIZE,
-                                           (void *) NULL,
-                                           (UBaseType_t) TASK_UI_PRIO,
-                                           l_task_ui_stack,
-                                           &l_task_ui_task_buffer);
+                                          (const char *) "task_ui",
+                                          (uint32_t) TASK_UI_STK_SIZE,
+                                          (void *) NULL,
+                                          (UBaseType_t) TASK_UI_PRIO,
+                                          l_task_ui_stack,
+                                          &l_task_ui_task_buffer);
 
     l_task_pid_queue = xQueueCreateStatic(l_task_pid_queue_size, l_task_pid_queue_item_size, l_task_pid_queue_buff,
                                           &l_task_pid_queue_static);
@@ -807,11 +824,13 @@ int main(void) {
         return -1;
     }
 
-    if(solder_init(&l_solder_handle, SolderIronType_JBC245, system_get_adc_iron_and_gun_sensor, system_set_iron_pwm,
-                system_get_iron_pwm, system_set_gun_pwm, system_get_gun_pwm, system_set_switch_220_ctl,gun_fan_fun)){
+    if (solder_init(&l_solder_handle, SolderIronType_JBC245, system_get_adc_iron_and_gun_sensor, system_set_iron_pwm,
+                    system_get_iron_pwm, system_set_gun_pwm, system_get_gun_pwm, system_set_switch_220_ctl,
+                    gun_fan_fun)) {
         printf("solder_init failed\n");
         return -1;
     }
+
     solder_set_iron_dest_temp(&l_solder_handle, l_iron_dest_temp);
     solder_set_iron_reed_key(&l_solder_handle, l_iron_reed_key_switch_state);
     solder_set_gun_dest_temp(&l_solder_handle, l_gun_dest_temp);

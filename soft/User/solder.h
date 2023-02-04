@@ -18,7 +18,7 @@
 
 #define SOLDER_IRON_TEMP_SLEEP 100 //烙铁睡眠温度
 #define SOLDER_IRON_TEMP_MAX 400 //烙铁最大可选温度
-#define SOLDER_IRON_TEMP_MIN 200 //烙铁最小可选温度
+#define SOLDER_IRON_TEMP_MIN 100 //烙铁最小可选温度
 
 #define SOLDER_GUN_TEMP_SLEEP 150 //风枪睡眠后风枪最高温度
 #define SOLDER_GUN_TEMP_MAX 400 //风枪最大可选温度

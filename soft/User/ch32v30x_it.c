@@ -22,7 +22,7 @@ void HardFault_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
  */
 void NMI_Handler(void)
 {
-
+    //printf("NMI_Handler\n");
 }
 
 /*********************************************************************
@@ -34,6 +34,7 @@ void NMI_Handler(void)
  */
 void HardFault_Handler(void)
 {
+    //printf("HardFault_Handler\n");
   while (1)
   {
       system_hardfault_deal();

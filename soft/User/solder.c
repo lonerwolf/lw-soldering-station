@@ -361,9 +361,9 @@ static uint8_t solder_iron_pid_op(PtSolder handle, uint16_t destValue, uint16_t 
             }
             break;
         case SolderIronType_JBC245:
-            if (e > 100) {//温差大于100全速
+            /*if (e > 100) {//温差大于100全速
                 res = SOLDER_PID_MAX_OUTPUT;
-            } else if (e > 50) {//温差大于50激进
+            } else*/ if (e > 50) {//温差大于50激进
                 //增量PID公式 PID=Uk+KP*【E(k)-E(k-1)】+KI*E(k)+KD*【E(k)-2E(k-1)+E(k-2)】
                 int32_t duk = handle->iron_pid.aggKp * (e - handle->iron_pid.e0) + handle->iron_pid.aggKi * e +
                               handle->iron_pid.aggKd * (e - 2 * handle->iron_pid.e0 + handle->iron_pid.e1);
@@ -519,6 +519,7 @@ void solder_loop(PtSolder handle) {
                 current_temp = solder_gun_temp_mean_filtering(handle, current_temp);
                 if (current_temp < SOLDER_GUN_TEMP_SLEEP) {
                     handle->gun_fan_set_pwm_fun(SOLDER_GUN_FAN_MIN);
+                    handle->gun_current_temp = 0;
                 } else {
                     handle->gun_fan_set_pwm_fun(handle->gun_fan_pwm);
                 }
@@ -539,7 +540,7 @@ void solder_loop(PtSolder handle) {
             }
         }
 
-/*        static uint32_t debug_count = 0;
+/*        static uint16_t debug_count = 0;
         debug_count++;
         if (debug_count >= 500) {
             debug_count = 0;
@@ -547,7 +548,7 @@ void solder_loop(PtSolder handle) {
             printf("iron_pwm:%d\n", handle->iron_get_pwm_fun());
             printf("iron_current_temp:%d\n", current_iron_temp);
             printf("iron_dest_temp:%d\n", handle->iron_dest_temp);
-            //printf("solder_conv_iron_adc_to_temp:%d\n", solder_conv_iron_adc_to_temp(ironAdcV));
+            //printf("solder_conv_iron_adc_to_temp:%d\n", solder_conv_iron_adc_to_temp(handle,ironAdcV));
 
             //printf("SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE:%d\n", SOLDER_JBC245_IRON_TEMP_400_ADC_VALUE);
             //printf("gun_dest_temp:%d\n",handle->gun_dest_temp);
